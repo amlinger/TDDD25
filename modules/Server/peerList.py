@@ -38,23 +38,38 @@ class PeerList(object):
             #
             # Your code here.
             #
-            all = self.owner.name_service.require_all(self.owner.type)
-            print(all)
-            pass
+            all_peers = self.owner.name_service.require_all(self.owner.type)
+            print(self.owner.id)
+            for peer in all_peers:
+                peer_id = peer[0]
+                if (peer_id != self.owner.id):
+                    addr = peer[1]
+                    # Smart lock?
+                    self.register_peer(peer_id,addr)
+                
+            #for pid in self.peers:
+            #self.peers[pid].register_peer(self.owner.id, self.owner.address);
+            
         finally:
             self.lock.release()
+        for pid in self.peers:
+            self.peers[pid].register_peer(self.owner.id, self.owner.address);
+            
 
     def destroy(self):
         """Unregister this peer from all others in the list."""
 
         self.lock.acquire()
         try:
-            #
-            # Your code here.
-            #
+            for pid in self.peers:
+                self.peers[pid].unregister_peer(self.owner.id)
+            
             pass
         finally:
             self.lock.release()
+            
+    def register(self, pid, paddr):
+        self.peers[pid] = orb.Stub(paddr)
 
     def register_peer(self, pid, paddr):
         """Register a new peer joining the network."""
