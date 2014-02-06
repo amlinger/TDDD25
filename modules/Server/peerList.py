@@ -38,6 +38,8 @@ class PeerList(object):
             #
             # Your code here.
             #
+            all = self.owner.name_service.require_all(self.owner.type)
+            print(all)
             pass
         finally:
             self.lock.release()
