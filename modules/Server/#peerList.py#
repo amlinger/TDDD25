@@ -92,7 +92,7 @@ class PeerList(object):
         try:
             if pid in self.peers:
                 del self.peers[pid]
-                # print("Peer {} has left the system.".format(pid))
+                print("Peer {} has left the system.".format(pid))
             else:
                 raise Exception("No peer with id: '{}'".format(pid))
         finally:
