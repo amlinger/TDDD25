@@ -30,7 +30,7 @@ class ReadWriteLock(object):
         self.reader_count = 0
         self.reader_lock = threading.Lock()
         self.writer_lock = threading.Lock()
-
+        
     # Public methods
 
     def read_acquire(self):
