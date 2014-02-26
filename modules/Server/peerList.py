@@ -32,6 +32,8 @@ class PeerList(object):
         object has been registered with the name service.
 
         """
+
+        # Fix deadlock
         self.lock.acquire()
         try:
             #
@@ -41,19 +43,25 @@ class PeerList(object):
             # print(self.owner.id)
             for peer in all_peers:
                 peer_id = peer[0]
-                print("initializing peer ", peer_id)
-                if (peer_id != self.owner.id):
-                    addr = peer[1]
+                addr = peer[1]
+                # print("initializing peer ", peer_id)
+                if (not peer_id == self.owner.id):
+                    # self.peers[peer_id].register_peer(self.owner.id, self.owner.address)
+                    self.peers[peer_id] = orb.Stub(addr)
+
+                if (peer_id < self.owner.id):
                     # Smart lock?
-                    self.register_peer(peer_id,addr)
+                    # self.peers[peer_id] = orb.Stub(addr)
+                    self.peers[peer_id].register_peer(self.owner.id, self.owner.address)
+                
                 
             #for pid in self.peers:
             #self.peers[pid].register_peer(self.owner.id, self.owner.address);
             
         finally:
             self.lock.release()
-        for pid in self.peers:
-            self.peers[pid].register_peer(self.owner.id, self.owner.address);
+        #for pid in self.peers:
+        #    self.peers[pid].register_peer(self.owner.id, self.owner.address);
             
 
     def destroy(self):
@@ -63,13 +71,11 @@ class PeerList(object):
         try:
             for pid in self.peers:
                 self.peers[pid].unregister_peer(self.owner.id)
-            
-            pass
         finally:
             self.lock.release()
             
-    def register(self, pid, paddr):
-        self.peers[pid] = orb.Stub(paddr)
+    #def register(self, pid, paddr):
+    #    self.peers[pid] = orb.Stub(paddr)
 
     def register_peer(self, pid, paddr):
         """Register a new peer joining the network."""
@@ -89,10 +95,11 @@ class PeerList(object):
         # this method in parallel.
 
         self.lock.acquire()
+        # print("Pid leaving: " + str(pid))
         try:
             if pid in self.peers:
                 del self.peers[pid]
-                # print("Peer {} has left the system.".format(pid))
+                print("Peer {} has left the system.".format(pid))
             else:
                 raise Exception("No peer with id: '{}'".format(pid))
         finally:
@@ -125,6 +132,7 @@ class PeerList(object):
 
         self.lock.acquire()
         try:
+        
             return self.peers
         finally:
-            self.lock.release()
+           self.lock.release()

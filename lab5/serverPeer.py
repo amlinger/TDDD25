@@ -115,8 +115,10 @@ class Server(orb.Peer):
         # Your code here.
         #
         self.drwlock.read_acquire()
-        read = self.db.read()
-        self.drwlock.read_release()
+        try:
+            read = self.db.read()
+        finally:
+            self.drwlock.read_release()
         return read
 
     def write(self, fortune):
@@ -132,12 +134,18 @@ class Server(orb.Peer):
         # Your code here.
         #
         
+        peers = self.peer_list.get_peers()
         self.drwlock.write_acquire()
-        self.db.write(fortune)
-        for peer in self.peer_list.get_peers().values(): 
-            #if (not (pid == self.id)):
-            peer.write_no_lock(fortune) 
-        self.drwlock.write_release()
+        try:
+            # self.peer_list.lock.acquire()
+            print("Wrote:\n" + fortune)
+            self.db.write(fortune)
+            for peer in peers.values(): 
+                # if (not (pid == self.id)):
+                peer.write_no_lock(fortune)
+        finally:
+            # self.peer_list.lock.acquire()
+            self.drwlock.write_release()
         
 
     def write_no_lock(self, fortune):
@@ -149,7 +157,7 @@ class Server(orb.Peer):
         """
 
         self.db.write(fortune)
-        print("Wrote:\n" + fortune)
+        print("Wrote with no lock:\n" + fortune)
 
     def register_peer(self, pid, paddr):
         """Register a server peer in this server's peer list."""

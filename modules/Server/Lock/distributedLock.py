@@ -101,15 +101,24 @@ class DistributedLock(object):
         # This is based on the assumption that the name service 
         # provides incrementing process id:s.
         self.token = {}
-        if(not self.peer_list.get_peers() or min(self.peer_list.get_peers()) > self.owner.id):
-            self.token[self.owner.id] = 0
-            self.state = TOKEN_PRESENT
-            print("I have the token! ", self.owner.id)
+
+        # PROTECT WITH LOCK
+        # if(not self.peer_list.get_peers() or min(self.peer_list.get_peers()) > self.owner.id):
+        peer = self.peer_list.get_peers()
+        self.peer_list.lock.acquire()
+        try:
+            if(not peer or min(peer.keys()) > self.owner.id):
+                self.token[self.owner.id] = 0
+                self.state = TOKEN_PRESENT
+                print("I have the token! ", self.owner.id)
             
         
-        for pid in self.peer_list.get_peers().keys():
-            self.token[pid] = 0
-            self.request[pid] = 0
+                for pid in peer.keys():
+                    self.token[pid] = 0
+                    self.request[pid] = 0
+        finally:
+            self.peer_list.lock.release()
+
 
     def destroy(self):
         """ The object is being destroyed.
@@ -121,16 +130,19 @@ class DistributedLock(object):
         #
         # Your code here.
         #
-        
-        if(self.state == TOKEN_HELD):
-            self.release()
+        peers = self.peer_list.get_peers()
+        self.peer_list.lock.acquire()
+        try:
+            if(self.state == TOKEN_HELD):
+                self.release_no_lock()
 
-        if(self.state == TOKEN_PRESENT):
-            peers = self.peer_list.get_peers()
-            
-            # Unless we are the last peer that is still alive
-            if(peers):
-                peers[min(peers)].obtain_token(self._prepare(self.token))
+                if(self.state == TOKEN_PRESENT):
+                # Unless we are the last peer that is still alive
+                    if(peers):
+                        peers[min(peers.keys())].obtain_token(self._prepare(self.token))
+        finally:
+            self.peer_list.lock.release()
+
 
     def register_peer(self, pid):
         """Called when a new peer joins the system."""
@@ -139,14 +151,17 @@ class DistributedLock(object):
         #
         self.token[pid] = 0
         self.request[pid] = 0
+        # print("Hasse")
 
     def unregister_peer(self, pid):
         """Called when a peer leaves the system."""
         #
         # Your code here.
         #
-        del self.token[pid]
-        del self.request[pid]
+        if pid in self.token:
+            del self.token[pid]
+        if pid in self.request:
+            del self.request[pid]
 
     def acquire(self):
         """Called when this object tries to acquire the lock."""
@@ -156,12 +171,18 @@ class DistributedLock(object):
         #
         
         if(self.state == NO_TOKEN):
-            # Adds the aquire request to all other peers
-            for pid in self.peer_list.get_peers():
-                print(pid)
-                self.peer_list.peer(pid).request_token(self.time, self.owner.id)
+            peers = self.peer_list.get_peers()
+            self.peer_list.lock.acquire()
+            try:
+                # Adds the aquire request to all other peers
+                for pid in peers:
+                    print(pid)
+                    self.peer_list.peer(pid).request_token(self.time, self.owner.id)
             # peer.request_token(self.time, self.owner.id)
-              
+            finally:
+                self.peer_list.lock.release()
+
+
             # Busy wait to aquire the token
             while(self.state != TOKEN_PRESENT):
                 pass
@@ -169,21 +190,29 @@ class DistributedLock(object):
         # Declares that Im holding the token
         self.state = TOKEN_HELD
 
-
     def release(self):
+        self.peer_list.lock.acquire()
+        try:
+            self.release_no_lock()
+        finally:
+            self.peer_list.lock.release()
+ 
+
+    def release_no_lock(self):
+
         """Called when this object releases the lock."""
         print("Releasing the lock...")
         #
         # Your code here.
         #
-
+        peers = self.peer_list.get_peers()
         self.state = TOKEN_PRESENT
         # WHY?
         self.time  += 1
 
         # MAGIC!
-        larger_pids = [key for key in self.peer_list.get_peers().keys() if key > self.owner.id]
-        smaller_pids = [key for key in self.peer_list.get_peers().keys() if key < self.owner.id]
+        larger_pids = [key for key in peers.keys() if key > self.owner.id]
+        smaller_pids = [key for key in peers.keys() if key < self.owner.id]
 
         for k in (larger_pids + smaller_pids):
             if(self.request[k] > self.token[k]):
@@ -200,11 +229,14 @@ class DistributedLock(object):
         #
   
         # Lamport clock
-        t = max(self.time, time)
-        self.request[pid] = t + 1
-        if(self.state == TOKEN_PRESENT):
-            self.release()
-
+        self.peer_list.lock.acquire()
+        try:
+            t = max(self.time, time)
+            self.request[pid] = t + 1
+            if(self.state == TOKEN_PRESENT):
+                self.release_no_lock()
+        finally:
+            self.peer_list.lock.release()
 
     def obtain_token(self, token):
         """Called when some other object is giving us the token."""
